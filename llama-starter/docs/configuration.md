@@ -2,13 +2,15 @@
 
 ## Overview
 
-The LLaMA RAG Starter Kit uses **minimal configuration** with sensible defaults. Most configuration is done through `RAGService` constructor parameters rather than external config files.
+The LLaMA RAG Starter Kit uses **minimal configuration** with sensible defaults. Most configuration is done through the `KnowledgeBaseService` (or `RecordsService`) constructor parameters rather than external config files.
+
+> `RAGService` remains a backwards-compatible alias for `KnowledgeBaseService`. Existing code samples referencing `RAGService` continue to work unchanged.
 
 ## Configuration Hierarchy
 
 Configuration priority (highest to lowest):
 
-1. **Constructor Parameters** - Passed directly to `RAGService()`
+1. **Constructor Parameters** - Passed directly to `KnowledgeBaseService()` or `RecordsService()`
 2. **Environment Variables** - `LLAMA_RAG_*` prefix  
 3. **YAML Config** - `config/defaults.yaml`
 4. **Service Defaults** - Built-in constants in `RAGService`

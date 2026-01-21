@@ -28,15 +28,17 @@ Example:
     >>> print(answer)
 """
 
-from llama_rag.service import RAGService
+from llama_rag.service import RAGService, KnowledgeBaseService, RecordsService
 from llama_rag.rag import SimpleRAG, load_documents, split_documents, create_rag_chain
 from llama_rag.factories import get_embeddings, get_llm, get_vectorstore
 from llama_rag.config import get_config, load_yaml_config
 
-__version__ = "0.1.3"
+__version__ = "0.2.0"
 
 __all__ = [
     "RAGService",
+    "KnowledgeBaseService",
+    "RecordsService",
     "SimpleRAG",
     "load_documents",
     "split_documents",

@@ -6,7 +6,7 @@ after installing it with pip.
 """
 
 from pathlib import Path
-from llama_rag import RAGService
+from llama_rag import KnowledgeBaseService, RecordsService
 
 
 def example_basic_usage():
@@ -14,7 +14,7 @@ def example_basic_usage():
     print("=== Basic Usage ===\n")
     
     # Initialize service with defaults
-    service = RAGService(
+    service = KnowledgeBaseService(
         embedding_model="embeddinggemma",
         llm_model="llama3.2",
     )
@@ -34,7 +34,7 @@ def example_with_configuration():
     """Example with custom configuration."""
     print("=== Custom Configuration ===\n")
     
-    service = RAGService(
+    service = KnowledgeBaseService(
         # Model configuration
         embedding_type="ollama",
         embedding_model="embeddinggemma",
@@ -71,7 +71,7 @@ def example_context_manager():
     
     index_path = Path("./data/temp_index")
     
-    with RAGService(
+    with KnowledgeBaseService(
         index_path=index_path,
         auto_save=True,
     ) as service:
@@ -89,7 +89,7 @@ def example_retrieval_only():
     """Example: retrieve without generation."""
     print("=== Retrieval Without Generation ===\n")
     
-    service = RAGService()
+    service = KnowledgeBaseService()
     
     # Ingest
     service.ingest_from_text(
@@ -110,7 +110,7 @@ def example_query_with_sources():
     """Example: query with source documents."""
     print("=== Query With Sources ===\n")
     
-    service = RAGService()
+    service = KnowledgeBaseService()
     
     # Ingest
     service.ingest_from_text(
@@ -134,13 +134,13 @@ def example_index_management():
     index_path = Path("./data/managed_index")
     
     # Create and save
-    service = RAGService(auto_save=False)
+    service = KnowledgeBaseService(auto_save=False)
     service.ingest_from_text("Test document content")
     service.save(index_path)
     print(f"✓ Saved index to {index_path}")
     
     # Load existing
-    service2 = RAGService(index_path=index_path, auto_load=True)
+    service2 = KnowledgeBaseService(index_path=index_path, auto_load=True)
     print(f"✓ Loaded index from {index_path}")
     print(f"✓ Has index: {service2.has_index()}\n")
 
@@ -176,6 +176,19 @@ def example_document_processing():
         # Split into chunks
         chunks = split_documents(docs, chunk_size=500, chunk_overlap=50)
         print(f"✓ Split into {len(chunks)} chunks\n")
+
+
+def example_records_mode():
+    """Example: using RecordsService for metadata-first search."""
+    print("=== Records Mode (Advanced Search) ===\n")
+    service = RecordsService(auto_save=False)
+    service.add_record(
+        "Incident report about advanced search",
+        metadata={"category": "ops", "severity": "low"}
+    )
+    matches = service.search("advanced search")
+    for doc in matches:
+        print(f"Metadata: {doc.metadata}\nSnippet: {doc.page_content[:80]}...\n")
 
 
 if __name__ == "__main__":
@@ -221,6 +234,11 @@ if __name__ == "__main__":
     
     try:
         example_document_processing()
+    except Exception as e:
+        print(f"⚠ Example skipped: {e}\n")
+    
+    try:
+        example_records_mode()
     except Exception as e:
         print(f"⚠ Example skipped: {e}\n")
     

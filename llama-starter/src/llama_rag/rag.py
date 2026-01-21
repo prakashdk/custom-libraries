@@ -190,6 +190,38 @@ class SimpleRAG:
         self.chain = None
         
         logger.info("SimpleRAG initialized")
+
+    def _refresh_pipeline(self):
+        """Ensure retriever and chain reflect the current vector store."""
+        if self.vectorstore is None:
+            self.retriever = None
+            self.chain = None
+            return
+        current_k = 4
+        if self.retriever and hasattr(self.retriever, "search_kwargs"):
+            current_k = self.retriever.search_kwargs.get("k", current_k)
+        self.retriever = self.vectorstore.as_retriever(
+            search_kwargs={"k": current_k}
+        )
+        self.chain = create_rag_chain(self.retriever, self.llm)
+
+    def _index_chunks(self, chunks: List[Document]):
+        """Persist split document chunks without discarding existing data."""
+        if not chunks:
+            logger.warning("No document chunks to index; skipping")
+            return
+        if self.vectorstore is None:
+            vectorstore_cls = get_vectorstore(self.embeddings, type=self.vectorstore_type)
+            self.vectorstore = vectorstore_cls.from_documents(chunks, self.embeddings)
+            logger.info(f"Vector store initialized with {len(chunks)} chunks")
+        else:
+            if not hasattr(self.vectorstore, "add_documents"):
+                raise RuntimeError(
+                    f"Vector store type '{self.vectorstore_type}' does not support incremental updates"
+                )
+            self.vectorstore.add_documents(chunks)
+            logger.info(f"Appended {len(chunks)} chunks to existing vector store")
+        self._refresh_pipeline()
     
     def ingest(
         self,
@@ -212,19 +244,8 @@ class SimpleRAG:
         # Split documents
         splits = split_documents(documents, chunk_size, chunk_overlap)
         
-        # Create vector store from documents
         logger.info("Creating vector store and generating embeddings...")
-        vectorstore_cls = get_vectorstore(self.embeddings, type=self.vectorstore_type)
-        self.vectorstore = vectorstore_cls.from_documents(splits, self.embeddings)
-        
-        # Create retriever
-        self.retriever = self.vectorstore.as_retriever(
-            search_kwargs={"k": 4}
-        )
-        
-        # Create RAG chain
-        self.chain = create_rag_chain(self.retriever, self.llm)
-        
+        self._index_chunks(splits)
         logger.info(f"Ingestion complete: {len(splits)} chunks indexed")
     
     def ingest_documents(
@@ -246,19 +267,8 @@ class SimpleRAG:
         # Split documents (preserves metadata)
         splits = split_documents(documents, chunk_size, chunk_overlap)
         
-        # Create vector store from documents
         logger.info("Creating vector store and generating embeddings...")
-        vectorstore_cls = get_vectorstore(self.embeddings, type=self.vectorstore_type)
-        self.vectorstore = vectorstore_cls.from_documents(splits, self.embeddings)
-        
-        # Create retriever
-        self.retriever = self.vectorstore.as_retriever(
-            search_kwargs={"k": 4}
-        )
-        
-        # Create RAG chain
-        self.chain = create_rag_chain(self.retriever, self.llm)
-        
+        self._index_chunks(splits)
         logger.info(f"Ingestion complete: {len(splits)} chunks indexed")
     
     def query(
@@ -338,12 +348,5 @@ class SimpleRAG:
             allow_dangerous_deserialization=True
         )
         
-        # Create retriever
-        self.retriever = self.vectorstore.as_retriever(
-            search_kwargs={"k": 4}
-        )
-        
-        # Create RAG chain
-        self.chain = create_rag_chain(self.retriever, self.llm)
-        
+        self._refresh_pipeline()
         logger.info("Vector store loaded successfully")

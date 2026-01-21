@@ -6,14 +6,16 @@
 pip install -e .
 ```
 
+> Need deterministic metadata search? Use `RecordsService` instead of `KnowledgeBaseService`. Both share the same ingestion APIs but maintain separate default indexes.
+
 ## Basic Usage
 
 ```python
-from llama_rag import RAGService
+from llama_rag import KnowledgeBaseService
 from pathlib import Path
 
 # Initialize
-service = RAGService()
+service = KnowledgeBaseService()
 
 # Ingest
 service.ingest_from_directory(Path("./docs"))
@@ -62,12 +64,12 @@ pyproject.toml     ← Project config
 
 **Before:**
 ```python
-from common.service import RAGService
+from common.service import KnowledgeBaseService
 ```
 
 **After:**
 ```python
-from llama_rag import RAGService
+from llama_rag import KnowledgeBaseService
 ```
 
 ## Documentation
@@ -92,7 +94,7 @@ from llama_rag import RAGService
 pip show llama-rag-lib
 
 # Test import
-python -c "from llama_rag import RAGService; print('OK')"
+python -c "from llama_rag import KnowledgeBaseService; print('OK')"
 
 # Run examples
 python examples/library_usage.py

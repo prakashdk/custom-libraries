@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-01-21
+
+### Added
+- Dual service modes: `KnowledgeBaseService` (RAG QA) and `RecordsService` (metadata search)
+- CLI `--mode` flag plus records-mode query output
+- `tests/test_rag_incremental.py` to guard against index overwrites
+
+### Changed
+- Incremental ingestion now appends chunks instead of rebuilding vector stores
+- Documentation and examples now reference the two dedicated services
+
+### Fixed
+- Prevent add-document flows from clobbering prior records by reusing the existing FAISS store
+
 ## [0.1.3] - 2026-01-21
 
 ### Fixed

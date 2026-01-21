@@ -1,18 +1,22 @@
 """
 RAG Service Module.
 
-This module provides a high-level RAGService class for Retrieval-Augmented Generation.
-Framework-agnostic service with sensible defaults that can be used in CLI apps,
-web servers, notebooks, or any Python application.
+This module provides high-level service classes for Retrieval-Augmented Generation
+and metadata-first search. The services share a common base but keep their
+indexes separated so advanced search records do not collide with knowledge-base
+documents.
 
 Classes:
-    RAGService: High-level RAG service with lifecycle management
+    BaseRAGService: Common ingestion/indexing functionality
+    KnowledgeBaseService: RAG workflow with LLM-backed QA
+    RecordsService: Metadata-first document search without generation
+    RAGService: Backwards-compatible alias for KnowledgeBaseService
 
 Example:
-    >>> from llama_rag import RAGService
+    >>> from llama_rag import KnowledgeBaseService
     >>> from pathlib import Path
     >>> 
-    >>> service = RAGService()
+    >>> service = KnowledgeBaseService()
     >>> service.ingest_from_directory(Path("./docs"))
     >>> answer = service.query("What is this about?")
 """
@@ -32,7 +36,7 @@ logger = get_logger(__name__)
 console = Console()
 
 
-class RAGService:
+class BaseRAGService:
     """
     High-level RAG service with lifecycle management and sensible defaults.
     
@@ -49,6 +53,8 @@ class RAGService:
     - Query with/without generation
     """
     
+    MODE_NAME = "base"
+    DEFAULT_INDEX_SUBDIR = "index"
     # Service-level defaults
     DEFAULT_EMBEDDING_TYPE = "ollama"
     DEFAULT_EMBEDDING_MODEL = "embeddinggemma"
@@ -94,7 +100,7 @@ class RAGService:
             chunk_overlap: Chunk overlap (defaults to 50)
             retrieval_k: Number of docs to retrieve (defaults to 4)
         """
-        self.index_path = index_path or Path("./data/index")
+        self.index_path = index_path or self._default_index_path()
         self.auto_save = auto_save
         
         # Store configuration with defaults
@@ -109,7 +115,17 @@ class RAGService:
         self.retrieval_k = retrieval_k or self.DEFAULT_RETRIEVAL_K
         
         # Create SimpleRAG with config
-        self.rag = SimpleRAG(
+        self.rag = self._build_rag()
+        
+        # Auto-load existing index
+        if auto_load and self.index_path.exists():
+            self._attempt_load(self.index_path)
+
+    def _default_index_path(self) -> Path:
+        return Path("./data") / self.DEFAULT_INDEX_SUBDIR
+
+    def _build_rag(self) -> SimpleRAG:
+        return SimpleRAG(
             embedding_type=self.embedding_type,
             embedding_model=self.embedding_model,
             llm_type=self.llm_type,
@@ -117,14 +133,13 @@ class RAGService:
             llm_temperature=self.llm_temperature,
             vectorstore_type=self.vectorstore_type,
         )
-        
-        # Auto-load existing index
-        if auto_load and self.index_path.exists():
-            try:
-                self.rag.load(self.index_path)
-                logger.info(f"Loaded existing index from: {self.index_path}")
-            except Exception as e:
-                logger.warning(f"Could not load index from {self.index_path}: {e}")
+
+    def _attempt_load(self, path: Path) -> None:
+        try:
+            self.rag.load(path)
+            logger.info(f"[{self.MODE_NAME}] Loaded existing index from: {path}")
+        except Exception as e:
+            logger.warning(f"[{self.MODE_NAME}] Could not load index from {path}: {e}")
     
     def __enter__(self):
         """Context manager entry."""
@@ -167,7 +182,7 @@ class RAGService:
                 f"Please check the path and try again."
             )
         
-        logger.info(f"Ingesting from directory: {directory}")
+        logger.info(f"[{self.MODE_NAME}] Ingesting from directory: {directory}")
         
         # Use service defaults if not specified
         chunk_size = chunk_size or self.chunk_size
@@ -204,7 +219,7 @@ class RAGService:
         if self.auto_save:
             self.save()
         
-        logger.info(f"Successfully ingested from: {directory}")
+        logger.info(f"[{self.MODE_NAME}] Successfully ingested from: {directory}")
         return len(list(directory.glob("*")))
     
     def ingest_from_texts(
@@ -226,15 +241,13 @@ class RAGService:
         Returns:
             Number of documents ingested
         """
-        logger.info(f"Ingesting {len(texts)} text documents")
+        logger.info(f"[{self.MODE_NAME}] Ingesting {len(texts)} text documents")
         
         # Use service defaults if not specified
         chunk_size = chunk_size or self.chunk_size
         chunk_overlap = chunk_overlap or self.chunk_overlap
         
         # Create Document objects with metadata
-        from langchain_core.documents import Document
-        
         documents = []
         for idx, text in enumerate(texts):
             doc_metadata = metadata[idx] if metadata and idx < len(metadata) else {}
@@ -250,7 +263,7 @@ class RAGService:
         if self.auto_save:
             self.save()
         
-        logger.info(f"Successfully ingested {len(texts)} documents")
+        logger.info(f"[{self.MODE_NAME}] Successfully ingested {len(texts)} documents")
         return len(texts)
     
     def add_document(
@@ -272,7 +285,7 @@ class RAGService:
         Returns:
             Number of chunks added (1 document may create multiple chunks)
         """
-        logger.info(f"Adding single document")
+        logger.info(f"[{self.MODE_NAME}] Adding single document")
         
         # Use ingest_from_texts with single document
         return self.ingest_from_texts(
@@ -281,46 +294,6 @@ class RAGService:
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
         )
-    
-    def query(self, query: str, k: Optional[int] = None) -> str:
-        """
-        Query with RAG generation.
-        
-        Args:
-            query: Query string
-            k: Number of documents to retrieve (defaults to service config)
-        
-        Returns:
-            Generated response
-        
-        Raises:
-            ValueError: If no index is loaded
-            RuntimeError: If Ollama is not running (when using Ollama)
-        """
-        if not self.has_index():
-            raise ValueError(
-                f"No index available. Please ingest documents first:\n"
-                f"  python -m app.cli ingest <directory> --output {self.index_path}\n"
-                f"Or load an existing index:\n"
-                f"  service.load(Path('{self.index_path}'))"
-            )
-        
-        k = k or self.retrieval_k
-        
-        logger.info(f"Querying: {query[:100]}")
-        
-        try:
-            response = self.rag.query(query, k=k)
-        except Exception as e:
-            if "Connection refused" in str(e) or "ConnectionError" in str(type(e).__name__):
-                raise RuntimeError(
-                    f"Cannot connect to Ollama. Please ensure Ollama is running:\n"
-                    f"  ollama serve\n"
-                    f"Original error: {e}"
-                )
-            raise
-        
-        return response
     
     def retrieve(self, query: str, k: Optional[int] = None) -> List[Document]:
         """
@@ -338,64 +311,10 @@ class RAGService:
         
         k = k or self.retrieval_k
         
-        logger.info(f"Retrieving for: {query[:100]}")
+        logger.info(f"[{self.MODE_NAME}] Retrieving for: {query[:100]}")
         docs = self.rag.retrieve(query, k=k)
         
         return docs
-    
-    def free_query(self, context: str, question: str) -> str:
-        """
-        Query LLM directly with provided context (no retrieval).
-        
-        Useful for:
-        - Custom context that's not in the index
-        - Testing prompts without retrieval
-        - One-off questions with specific context
-        
-        Args:
-            context: Context text to provide to the LLM
-            question: Question to ask
-        
-        Returns:
-            Generated response
-        
-        Example:
-            >>> context = "Python is a programming language."
-            >>> answer = service.free_query(context, "What is Python?")
-        """
-        logger.info(f"Free query: {question[:100]}")
-        
-        try:
-            # Use the RAG's chain directly with provided context
-            from langchain_core.prompts import ChatPromptTemplate
-            from langchain_core.output_parsers import StrOutputParser
-            
-            template = """Answer the question based only on the following context:
-
-Context: {context}
-
-Question: {question}
-
-Answer:"""
-            
-            prompt = ChatPromptTemplate.from_template(template)
-            chain = prompt | self.rag.llm | StrOutputParser()
-            
-            response = chain.invoke({
-                "context": context,
-                "question": question
-            })
-            
-            return response
-            
-        except Exception as e:
-            if "Connection refused" in str(e) or "ConnectionError" in str(type(e).__name__):
-                raise RuntimeError(
-                    f"Cannot connect to Ollama. Please ensure Ollama is running:\n"
-                    f"  ollama serve\n"
-                    f"Original error: {e}"
-                )
-            raise
     
     def save(self, path: Optional[Path] = None) -> None:
         """
@@ -407,11 +326,11 @@ Answer:"""
         save_path = path or self.index_path
         
         if not self.has_index():
-            logger.warning("No index to save")
+            logger.warning(f"[{self.MODE_NAME}] No index to save")
             return
         
         self.rag.save(save_path)
-        logger.info(f"Saved index to: {save_path}")
+        logger.info(f"[{self.MODE_NAME}] Saved index to: {save_path}")
     
     def load(self, path: Optional[Path] = None) -> None:
         """
@@ -426,7 +345,7 @@ Answer:"""
             raise FileNotFoundError(f"Index not found: {load_path}")
         
         self.rag.load(load_path)
-        logger.info(f"Loaded index from: {load_path}")
+        logger.info(f"[{self.MODE_NAME}] Loaded index from: {load_path}")
     
     def has_index(self) -> bool:
         """Check if index is loaded."""
@@ -442,6 +361,7 @@ Answer:"""
         return {
             "has_index": self.has_index(),
             "index_path": str(self.index_path),
+            "mode": self.MODE_NAME,
             "embedding_type": self.embedding_type,
             "embedding_model": self.embedding_model,
             "llm_type": self.llm_type,
@@ -456,8 +376,8 @@ Answer:"""
     
     def reset(self) -> None:
         """Reset service (clear index)."""
-        self.rag = SimpleRAG()
-        logger.info("Service reset")
+        self.rag = self._build_rag()
+        logger.info(f"[{self.MODE_NAME}] Service reset")
     
     def reindex_all(
         self,
@@ -494,7 +414,7 @@ Answer:"""
         if not self.has_index():
             raise ValueError("No index available. Cannot reindex without existing documents.")
         
-        logger.info("Starting reindex of all documents")
+        logger.info(f"[{self.MODE_NAME}] Starting reindex of all documents")
         
         # Get current documents from vectorstore
         # Note: This extracts the raw text from all chunks
@@ -503,12 +423,12 @@ Answer:"""
             # FAISS doesn't have a direct way to get all docs, so we use docstore
             if hasattr(self.rag.vectorstore, 'docstore'):
                 all_docs = list(self.rag.vectorstore.docstore._dict.values())
-                logger.info(f"Found {len(all_docs)} chunks to reindex")
+                logger.info(f"[{self.MODE_NAME}] Found {len(all_docs)} chunks to reindex")
             else:
                 raise ValueError("Vectorstore doesn't support document extraction")
             
             if not all_docs:
-                logger.warning("No documents found in index")
+                logger.warning(f"[{self.MODE_NAME}] No documents found in index")
                 return 0
             
             # Extract unique source texts (combine chunks from same source)
@@ -528,11 +448,13 @@ Answer:"""
                 texts.append(combined_text)
                 metadata.append({'source': source})
             
-            logger.info(f"Extracted {len(texts)} unique documents")
+            logger.info(f"[{self.MODE_NAME}] Extracted {len(texts)} unique documents")
             
             # Clear current index
             self.rag.vectorstore = None
-            logger.info("Cleared existing index")
+            self.rag.retriever = None
+            self.rag.chain = None
+            logger.info(f"[{self.MODE_NAME}] Cleared existing index")
             
             # Use new chunk settings or current ones
             chunk_size = chunk_size or self.chunk_size
@@ -550,9 +472,105 @@ Answer:"""
                 chunk_overlap=chunk_overlap,
             )
             
-            logger.info(f"Successfully reindexed {count} documents")
+            logger.info(f"[{self.MODE_NAME}] Successfully reindexed {count} documents")
             return count
             
         except Exception as e:
-            logger.error(f"Failed to reindex: {e}")
+            logger.error(f"[{self.MODE_NAME}] Failed to reindex: {e}")
             raise RuntimeError(f"Reindex failed: {e}. Index may be in inconsistent state.")
+
+
+class RecordsService(BaseRAGService):
+    """Service optimized for record management and metadata-first search."""
+
+    MODE_NAME = "records"
+    DEFAULT_INDEX_SUBDIR = "records_index"
+
+    def add_record(
+        self,
+        text: str,
+        metadata: Optional[Dict[str, Any]] = None,
+        chunk_size: Optional[int] = None,
+        chunk_overlap: Optional[int] = None,
+    ) -> int:
+        """Alias for add_document with record-friendly naming."""
+        return self.add_document(
+            text=text,
+            metadata=metadata,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+        )
+
+    def search(self, query: str, k: Optional[int] = None) -> List[Document]:
+        """Search indexed records and return matching documents."""
+        return self.retrieve(query=query, k=k)
+
+
+class KnowledgeBaseService(BaseRAGService):
+    """Service optimized for question answering over a knowledge base."""
+
+    MODE_NAME = "knowledge"
+    DEFAULT_INDEX_SUBDIR = "knowledge_index"
+
+    def query(self, query: str, k: Optional[int] = None) -> str:
+        """Generate an answer using retrieval-augmented generation."""
+        if not self.has_index():
+            raise ValueError(
+                "No knowledge index available. Ingest documents before querying."
+            )
+
+        k = k or self.retrieval_k
+        logger.info(f"[{self.MODE_NAME}] Querying: {query[:100]}")
+
+        try:
+            response = self.rag.query(query, k=k)
+        except Exception as e:
+            if "Connection refused" in str(e) or "ConnectionError" in str(type(e).__name__):
+                raise RuntimeError(
+                    "Cannot connect to Ollama. Please ensure Ollama is running:\n"
+                    "  ollama serve\n"
+                    f"Original error: {e}"
+                )
+            raise
+
+        return response
+
+    def free_query(self, context: str, question: str) -> str:
+        """Bypass retrieval and query the LLM directly with supplied context."""
+        logger.info(f"[{self.MODE_NAME}] Free query: {question[:100]}")
+
+        try:
+            from langchain_core.prompts import ChatPromptTemplate
+            from langchain_core.output_parsers import StrOutputParser
+
+            template = """Answer the question based only on the following context:
+
+Context: {context}
+
+Question: {question}
+
+Answer:"""
+
+            prompt = ChatPromptTemplate.from_template(template)
+            chain = prompt | self.rag.llm | StrOutputParser()
+
+            response = chain.invoke({
+                "context": context,
+                "question": question
+            })
+
+            return response
+
+        except Exception as e:
+            if "Connection refused" in str(e) or "ConnectionError" in str(type(e).__name__):
+                raise RuntimeError(
+                    "Cannot connect to Ollama. Please ensure Ollama is running:\n"
+                    "  ollama serve\n"
+                    f"Original error: {e}"
+                )
+            raise
+
+
+class RAGService(KnowledgeBaseService):
+    """Backwards-compatible alias that preserves the old class name."""
+

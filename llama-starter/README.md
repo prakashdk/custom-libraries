@@ -7,7 +7,7 @@ A pip-installable RAG (Retrieval-Augmented Generation) library built with LangCh
 
 ## Features
 
-- **Simple API**: High-level `RAGService` for easy integration
+- **Simple API**: High-level `KnowledgeBaseService` and `RecordsService` for easy integration
 - **LangChain-Based**: Uses battle-tested LangChain components
 - **Local-First**: Works with Ollama (runs on your machine)
 - **Flexible**: Support for multiple embedding and LLM providers
@@ -32,11 +32,11 @@ pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://
 ## Quick Start
 
 ```python
-from llama_rag import RAGService
+from llama_rag import KnowledgeBaseService
 from pathlib import Path
 
 # Initialize service
-service = RAGService(
+service = KnowledgeBaseService(
     embedding_model="embeddinggemma",
     llm_model="llama3.2",
 )
@@ -51,12 +51,19 @@ print(answer)
 
 ## Usage Examples
 
+### Choosing a Mode
+
+- `KnowledgeBaseService`: Optimized for retrieval-augmented generation. Use when you need conversational answers synthesized from your knowledge base.
+- `RecordsService`: Optimized for metadata/record search. Use when you want deterministic retrieval of matching documents (with metadata) without running an LLM.
+
+Both services share the same ingestion APIs but keep their index directories separated by default (`./data/knowledge_index` vs `./data/records_index`).
+
 ### Basic Usage
 
 ```python
-from llama_rag import RAGService
+from llama_rag import KnowledgeBaseService
 
-service = RAGService()
+service = KnowledgeBaseService()
 service.ingest_from_text("Python is a programming language.")
 answer = service.query("What is Python?")
 ```
@@ -64,10 +71,10 @@ answer = service.query("What is Python?")
 ### Advanced Configuration
 
 ```python
-from llama_rag import RAGService
+from llama_rag import KnowledgeBaseService
 from pathlib import Path
 
-service = RAGService(
+service = KnowledgeBaseService(
     # Model configuration
     embedding_type="ollama",
     embedding_model="embeddinggemma",
@@ -110,12 +117,12 @@ python -m app.cli query "What is ML?" --index ./data/index
 
 ## API Reference
 
-### RAGService
+### KnowledgeBaseService (default RAG mode)
 
 ```python
-from llama_rag import RAGService
+from llama_rag import KnowledgeBaseService
 
-service = RAGService(
+service = KnowledgeBaseService(
     index_path=Path("./data/index"),
     auto_load=True,
     auto_save=True,
@@ -141,12 +148,22 @@ service.load(Path("./index"))
 service.has_index()
 ```
 
+### RecordsService (advanced search mode)
+
+```python
+from llama_rag import RecordsService
+
+records = RecordsService()
+records.add_record("Ticket 123", metadata={"status": "open"})
+docs = records.search("Ticket 123")
+```
+
 ## Project Structure
 
 ```
 llama_rag_lib/
 ├── src/llama_rag/      # Library package (pip-installable)
-│   ├── service.py      # RAGService
+│   ├── service.py      # Base/Knowledge/Records services
 │   ├── rag.py          # Core RAG implementation
 │   ├── factories.py    # Component factories
 │   ├── config.py       # Configuration

@@ -47,7 +47,7 @@ twine upload --repository testpypi dist/*
 pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ llama_rag_lib
 
 # Test it
-python -c "from llama_rag import RAGService; print('✅ Works!')"
+python -c "from llama_rag import KnowledgeBaseService; print('✅ Works!')"
 ```
 
 ## Step 5: Upload to Production PyPI
@@ -70,7 +70,7 @@ twine upload dist/*
 pip install llama-rag-lib
 
 # Use it
-python -c "from llama_rag import RAGService; print('✅ Installed from PyPI!')"
+python -c "from llama_rag import KnowledgeBaseService; print('✅ Installed from PyPI!')"
 ```
 
 ## Alternative: Save Credentials (Optional)
@@ -120,7 +120,7 @@ cd /Users/p0d061n/Documents/apps/llama-starter
 python setup.py sdist
 
 # Upload to TestPyPI
-twine upload --repository testpypi dist/llama-rag-lib-0.1.0.tar.gz
+twine upload --repository testpypi dist/llama_rag_lib-0.1.0.tar.gz
 
 # Test install (note: --extra-index-url for dependencies)
 pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ llama_rag_lib
@@ -128,10 +128,10 @@ pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://
 pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ --upgrade --no-cache-dir llama_rag_lib
 
 # Upload to PyPI (production)
-twine upload dist/llama-rag-lib-0.1.0.tar.gz
+twine upload dist/llama_rag_lib-0.1.0.tar.gz
 
 # Install from PyPI
-pip install llama-rag-lib
+pip install llama_rag_lib
 ```
 
 ## Using Makefile (Easier)

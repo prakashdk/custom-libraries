@@ -9,11 +9,21 @@ import argparse
 import sys
 from pathlib import Path
 
-from llama_rag.service import RAGService
+from llama_rag.service import KnowledgeBaseService, RecordsService
 from llama_rag.config import get_config
 from llama_rag.utils import get_logger, configure_logging
 
 logger = get_logger(__name__)
+
+SERVICE_MAP = {
+    "knowledge": KnowledgeBaseService,
+    "records": RecordsService,
+}
+
+DEFAULT_INDEX_PATHS = {
+    name: Path("./data") / cls.DEFAULT_INDEX_SUBDIR
+    for name, cls in SERVICE_MAP.items()
+}
 
 
 def ingest_command(args):
@@ -23,15 +33,17 @@ def ingest_command(args):
     Usage:
         python -m app.cli ingest examples/demo-corpus/ --output ./data/index
     """
-    print(f"\n📥 Ingesting documents from: {', '.join(args.sources)}")
-    logger.info(f"Ingesting from: {args.sources}")
+    mode = args.mode
+    print(f"\n📥 Ingesting ({mode}) documents from: {', '.join(args.sources)}")
+    logger.info(f"Ingesting ({mode}) from: {args.sources}")
     
     # Read config once
     config = get_config()
     
     # Create service with config passed down
-    output_path = Path(args.output)
-    service = RAGService(
+    output_path = Path(args.output) if args.output else DEFAULT_INDEX_PATHS[mode]
+    service_cls = SERVICE_MAP[mode]
+    service = service_cls(
         index_path=output_path,
         auto_load=False,
         auto_save=False,
@@ -56,7 +68,7 @@ def ingest_command(args):
     service.save()
     
     stats = service.get_stats()
-    print(f"✅ Ingestion complete! Index saved to: {output_path}")
+    print(f"✅ Ingestion complete! {mode.title()} index saved to: {output_path}")
     if args.verbose:
         print(f"   Stats: {stats}")
     logger.info(f"✓ Ingestion complete. Index saved to: {output_path}")
@@ -69,7 +81,8 @@ def query_command(args):
     Usage:
         python -m app.cli query "What is machine learning?" --index ./data/index
     """
-    index_path = Path(args.index)
+    mode = args.mode
+    index_path = Path(args.index) if args.index else DEFAULT_INDEX_PATHS[mode]
     
     if not index_path.exists():
         logger.error(f"Index not found: {index_path}")
@@ -80,7 +93,8 @@ def query_command(args):
     config = get_config()
     
     # Load service with config passed down
-    service = RAGService(
+    service_cls = SERVICE_MAP[mode]
+    service = service_cls(
         index_path=index_path,
         auto_load=True,
         auto_save=False,
@@ -88,10 +102,28 @@ def query_command(args):
     )
     
     # Query
-    logger.info(f"Query: {args.query}")
-    print(f"\n🔍 Querying: {args.query}")
+    logger.info(f"Query ({mode}): {args.query}")
+    print(f"\n🔍 Querying [{mode}]: {args.query}")
     logger.debug(f"Retrieving top {args.k or service.retrieval_k} documents")
-    
+
+    if mode == "records":
+        docs = service.search(args.query, k=args.k)
+        if not docs:
+            print("No matching records found. Try ingesting or adjusting your query.")
+            return
+
+        print("\n" + "="*80)
+        print("MATCHING RECORDS:")
+        print("="*80)
+        for i, doc in enumerate(docs, 1):
+            meta = doc.metadata or {}
+            source = meta.get("source") or meta.get("category") or "Unknown"
+            print(f"\n[{i}] {source}")
+            print(f"Metadata: {meta}")
+            print(f"Snippet: {doc.page_content[:200]}...")
+        print("="*80 + "\n")
+        return
+
     response = service.query(args.query, k=args.k)
     
     print("\n" + "="*80)
@@ -139,10 +171,16 @@ def main():
         help="Source files or directories to ingest",
     )
     ingest_parser.add_argument(
+        "--mode",
+        choices=tuple(SERVICE_MAP.keys()),
+        default="knowledge",
+        help="Choose 'knowledge' for RAG QA or 'records' for advanced search (default: knowledge)",
+    )
+    ingest_parser.add_argument(
         "--output",
         "-o",
-        default="./data/index",
-        help="Output directory for index (default: ./data/index)",
+        default=None,
+        help="Output directory for index (defaults per mode)",
     )
     ingest_parser.add_argument(
         "--chunk-size",
@@ -164,10 +202,16 @@ def main():
         help="Query string",
     )
     query_parser.add_argument(
+        "--mode",
+        choices=tuple(SERVICE_MAP.keys()),
+        default="knowledge",
+        help="Choose 'knowledge' for RAG QA or 'records' for advanced search (default: knowledge)",
+    )
+    query_parser.add_argument(
         "--index",
         "-i",
-        default="./data/index",
-        help="Index directory (default: ./data/index)",
+        default=None,
+        help="Index directory (defaults per mode)",
     )
     query_parser.add_argument(
         "--k",

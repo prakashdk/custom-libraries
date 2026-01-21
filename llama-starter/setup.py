@@ -13,7 +13,7 @@ long_description = readme_path.read_text(encoding="utf-8") if readme_path.exists
 
 setup(
     name="llama_rag_lib",
-    version="0.1.3",
+    version="0.2.0",
     author="Your Name",
     author_email="your.email@example.com",
     description="A simple RAG library using LangChain and Ollama",

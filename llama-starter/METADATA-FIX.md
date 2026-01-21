@@ -1,4 +1,4 @@
-# Metadata Fix Summary - Version 0.1.3
+# Metadata Fix Summary - Version 0.2.0
 
 ## Issue
 The `ingest_from_texts()` and `add_document()` methods accepted a `metadata` parameter but didn't use it properly. Metadata was being lost during ingestion.
@@ -45,17 +45,17 @@ results = service.retrieve("machine learning")
 print(results[0].metadata)  # {'source': 'ml-intro', 'author': 'Alice'}
 ```
 
-## Version 0.1.3 Published
-- Package: `llama_rag_lib==0.1.3`
-- TestPyPI: https://test.pypi.org/project/llama-rag-lib/0.1.3/
-- Install: `pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ llama_rag_lib==0.1.3`
+## Version 0.2.0 Published
+- Package: `llama_rag_lib==0.2.0`
+- TestPyPI: https://test.pypi.org/project/llama-rag-lib/0.2.0/
+- Install: `pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ llama_rag_lib==0.2.0`
 
 ## API Usage
 ```python
-from llama_rag import RAGService
+from llama_rag import KnowledgeBaseService
 from pathlib import Path
 
-service = RAGService(
+service = KnowledgeBaseService(
     embedding_model="embeddinggemma:latest",
     llm_model="llama3.2:latest",
     index_path=Path("data/index")

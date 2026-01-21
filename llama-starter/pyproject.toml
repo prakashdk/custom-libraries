@@ -1,6 +1,6 @@
 [project]
 name = "llama_rag_lib"
-version = "0.1.3"
+version = "0.2.0"
 description = "A simple RAG library using LangChain and Ollama"
 authors = [
     {name = "ACME Engineering", email = "TODO@example.com"},  # TODO: Replace with actual authors

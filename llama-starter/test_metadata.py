@@ -3,10 +3,10 @@ Test metadata preservation in llama_rag_lib
 """
 
 from pathlib import Path
-from llama_rag import RAGService
+from llama_rag import KnowledgeBaseService
 
 # Initialize service
-service = RAGService(
+service = KnowledgeBaseService(
     embedding_model="embeddinggemma:latest",
     llm_model="llama3.2:latest",
     index_path=Path("data/test_index"),
