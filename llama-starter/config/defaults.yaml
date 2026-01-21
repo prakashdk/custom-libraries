@@ -1,0 +1,7 @@
+# Minimal configuration
+# Most defaults are in the service layer for better encapsulation
+# Override via environment variables: LLAMA_RAG_INDEX__PATH=./my-index
+
+index:
+  path: "./data/index"
+  auto_save: true
